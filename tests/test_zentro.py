@@ -2,6 +2,11 @@ import os
 import sys
 import unittest
 from datetime import datetime, timedelta
+from unittest import mock
+
+from google.api_core import exceptions as google_exceptions
+
+from fastapi.testclient import TestClient
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 AGENT_DIR = os.path.join(ROOT, 'ai-agents')
@@ -10,13 +15,87 @@ if AGENT_DIR not in sys.path:
 
 from agent_coordinator import AgentCoordinator
 from mandate_creator import MandateCreator
-from backend.policy_engine import PolicyDecisionEngine, PolicyMandateParser
+from backend.policy_engine import MandateParsingError, PolicyDecisionEngine, PolicyMandateParser
+from backend.server import app
+
+
+client = TestClient(app)
 
 
 class ZentroAgentTests(unittest.TestCase):
+    def test_backend_health_and_dashboard_routes(self):
+        health = client.get('/api/health')
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(health.json()['status'], 'ok')
+        self.assertIn('gemini', health.json())
+
+        status = client.get('/api/gemini/status')
+        self.assertEqual(status.status_code, 200)
+        self.assertIn('gemini', status.json())
+
+        dashboard = client.get('/api/dashboard')
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertIn('summaryCards', dashboard.json())
+        self.assertIn('recentTransactions', dashboard.json())
+
+    def test_policy_endpoints_support_approve_block_and_escalate(self):
+        approve_payload = {
+            'user_id': 'user-1',
+            'mandate_id': 'm-approve',
+            'product_name': 'USB-C Hub',
+            'product_category': 'electronics',
+            'product_price': 2500,
+            'merchant_name': 'Dell Technologies',
+            'merchant_trust_status': 'verified',
+            'currency': 'INR',
+            'transaction_date': '2026-11-06',
+            'mandate_rules': {
+                'max_transaction_amount': 5000,
+                'allowed_categories': ['electronics'],
+                'blocked_categories': [],
+                'allowed_days': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                'require_approval_above': 3000,
+                'currency': 'INR',
+                'merchant_verification_required': True,
+            },
+        }
+        block_payload = {**approve_payload, 'product_price': 7000, 'product_name': 'Gaming Laptop'}
+        escalate_payload = {**approve_payload, 'merchant_name': 'Unknown Seller', 'merchant_trust_status': 'unknown'}
+
+        approve = client.post('/api/policy/evaluate', json=approve_payload)
+        self.assertEqual(approve.status_code, 200)
+        self.assertEqual(approve.json()['decision']['decision'], 'APPROVE')
+
+        block = client.post('/api/policy/evaluate', json=block_payload)
+        self.assertEqual(block.status_code, 200)
+        self.assertEqual(block.json()['decision']['decision'], 'BLOCK')
+
+        escalate = client.post('/api/policy/evaluate', json=escalate_payload)
+        self.assertEqual(escalate.status_code, 200)
+        self.assertEqual(escalate.json()['decision']['decision'], 'ESCALATE')
+
+    def test_mandate_routes_persist_and_retrieve(self):
+        create = client.post('/api/mandates', json={
+            'name': 'Test Live Mandate',
+            'status': 'active',
+            'monthlyLimit': 7500,
+            'perPurchaseLimit': 2200,
+            'approvalThreshold': 85,
+            'allowedCategories': ['Technology'],
+            'prohibitedCategories': [],
+            'sellerRestrictions': ['verified sellers only']
+        })
+        self.assertEqual(create.status_code, 200)
+        payload = create.json()
+        self.assertTrue(payload['success'])
+
+        mandates = client.get('/api/mandates')
+        self.assertEqual(mandates.status_code, 200)
+        self.assertGreaterEqual(len(mandates.json()['mandates']), 1)
+
     def test_default_model_matches_requirements(self):
         from config import get_agent_config
-        self.assertEqual(get_agent_config()['model'], 'gemini-3.5-flash')
+        self.assertEqual(get_agent_config()['model'], 'gemini-3.8-flash')
 
     def test_mandate_creator_returns_structured_mandate(self):
         result = MandateCreator({'gemini_api_key': ''}).evaluate({
@@ -142,6 +221,33 @@ class ZentroAgentTests(unittest.TestCase):
         )
         self.assertEqual(result['decision'], 'ESCALATE')
 
+    def test_policy_engine_escalates_ambiguous_category(self):
+        engine = PolicyDecisionEngine()
+        result = engine.evaluate_purchase(
+            user_id='user-1',
+            mandate_id='mandate-ambiguous-category',
+            product_name='Mixed Item',
+            product_category='miscellaneous',
+            product_price=500,
+            merchant_name='Unknown Seller',
+            merchant_trust_status='unknown',
+            currency='INR',
+            transaction_date='2026-11-06',
+            mandate_rules={
+                'max_transaction_amount': 2000,
+                'allowed_categories': ['food', 'education'],
+                'blocked_categories': ['electronics', 'entertainment'],
+                'allowed_days': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                'require_approval_above': 1500,
+                'currency': 'INR',
+                'merchant_verification_required': True,
+                'require_user_confirmation_for': ['unknown'],
+                'unknown_merchant_blocked': True,
+                'allow_unknown_merchants': False,
+            },
+        )
+        self.assertEqual(result['decision'], 'ESCALATE')
+
     def test_policy_engine_requires_price(self):
         engine = PolicyDecisionEngine()
         with self.assertRaises(ValueError):
@@ -218,11 +324,46 @@ class ZentroAgentTests(unittest.TestCase):
         normalized = parser._normalize_response('{not valid json}')
         self.assertEqual(normalized, {})
 
-    def test_policy_engine_handles_unavailable_gemini(self):
-        parser = PolicyMandateParser(api_key='', gemini_client=None)
-        result = parser.parse('Buy electronics under ₹5,000.')
+    def test_live_gemini_mandate_parsing_integration(self):
+        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('ZENTRO_GEMINI_API_KEY')
+        if not api_key:
+            self.skipTest('GEMINI_API_KEY is not configured for live integration testing.')
+
+        parser = PolicyMandateParser(api_key=api_key, gemini_client=None)
+        try:
+            result = parser.parse('Allow monthly technology spending up to 50000 rupees. Any single purchase above 10000 rupees requires human approval. Only verified sellers are allowed.')
+        except MandateParsingError as exc:
+            if exc.error_type in {'quota_error', 'timeout', 'network_error', 'authentication_error', 'missing_api_key'}:
+                self.skipTest(f'Live Gemini integration is unavailable in this environment: {exc.error_type}: {exc}')
+            raise
+        except google_exceptions.GoogleAPIError as exc:
+            self.skipTest(f'Live Gemini integration is unavailable in this environment: {type(exc).__name__}: {exc}')
+
         self.assertIn('max_transaction_amount', result)
         self.assertIn('allowed_categories', result)
+        self.assertTrue(result['merchant_verification_required'])
+
+    def test_policy_engine_requires_explicit_error_when_gemini_unavailable(self):
+        with mock.patch.dict(os.environ, {'GEMINI_API_KEY': '', 'ZENTRO_GEMINI_API_KEY': ''}, clear=False):
+            parser = PolicyMandateParser(api_key='', gemini_client=None)
+            with self.assertRaises(MandateParsingError) as cm:
+                parser.parse('Buy electronics under ₹5,000.')
+            self.assertEqual(cm.exception.error_type, 'missing_api_key')
+
+    def test_policy_engine_explicit_fallback_is_separate_from_live_ai(self):
+        with mock.patch.dict(os.environ, {'GEMINI_API_KEY': '', 'ZENTRO_GEMINI_API_KEY': ''}, clear=False):
+            parser = PolicyMandateParser(api_key='', gemini_client=None)
+            result = parser.parse_with_fallback('Buy electronics under ₹5,000.')
+            self.assertEqual(result['source'], 'fallback')
+            self.assertIn('rules', result)
+            self.assertIn('max_transaction_amount', result['rules'])
+
+    def test_policy_engine_rejects_invalid_gemini_response(self):
+        parser = PolicyMandateParser(api_key='dummy-key', gemini_client=None)
+        parser._call_gemini = lambda text: {}
+        with self.assertRaises(MandateParsingError) as cm:
+            parser.parse('Allow monthly technology spending up to 50000 rupees.')
+        self.assertIn(cm.exception.error_type, {'invalid_model_response', 'invalid_mandate_schema'})
 
     def test_policy_engine_rejects_unauthorized_mandate_access(self):
         engine = PolicyDecisionEngine()

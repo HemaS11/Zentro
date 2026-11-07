@@ -18,7 +18,7 @@ class PolicyJudgeResult:
 class PolicyJudge:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        self.model = self.config.get("model", "gemini-3.5-flash")
+        self.model = self.config.get("model", "gemini-3.8-flash")
 
     def _as_float(self, value: Any) -> Optional[float]:
         try:

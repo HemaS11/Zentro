@@ -4,18 +4,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT / ".env", override=False)
+
+AGENT_DIR = ROOT / "ai-agents"
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
 
 try:
     from backend.policy_engine import PolicyDecisionEngine, PolicyMandateParser, PolicyValidationError
 except Exception:  # pragma: no cover
     sys.path.insert(0, str(ROOT))
     from backend.policy_engine import PolicyDecisionEngine, PolicyMandateParser, PolicyValidationError
-
-ROOT = Path(__file__).resolve().parent.parent
-AGENT_DIR = ROOT / "ai-agents"
 if str(AGENT_DIR) not in sys.path:
     sys.path.insert(0, str(AGENT_DIR))
 
@@ -67,6 +72,60 @@ SEED_MANDATES = [
     {"id": "M-140", "name": "Luxury Retail", "status": "Active", "active": True, "remainingBudget": 2100, "allowedCategories": ["Luxury Goods", "Fashion"], "monthlyLimit": 5000, "perPurchaseLimit": 1200, "approvalThreshold": 75, "verifiedSellerOnly": True},
     {"id": "M-155", "name": "Technology Safety", "status": "Paused", "active": False, "remainingBudget": 1200, "allowedCategories": ["Technology"], "monthlyLimit": 30000, "perPurchaseLimit": 15000, "approvalThreshold": 90, "verifiedSellerOnly": True},
 ]
+
+
+def get_seed_mandates() -> List[Dict[str, Any]]:
+    try:
+        mandates = policy_engine.list_user_mandates("demo-user")
+        if mandates:
+            normalized = []
+            for mandate in mandates:
+                rules = mandate.get("rules", {})
+                normalized.append({
+                    "id": mandate["id"],
+                    "name": mandate.get("name") or "Mandate",
+                    "status": mandate.get("status") or ("Active" if mandate.get("active") else "Paused"),
+                    "active": bool(mandate.get("active", True)),
+                    "remainingBudget": float(rules.get("max_transaction_amount", 0) or 0),
+                    "allowedCategories": rules.get("allowed_categories", []),
+                    "monthlyLimit": float(rules.get("max_transaction_amount", 0) or 0),
+                    "perPurchaseLimit": float(rules.get("require_approval_above", 0) or 0),
+                    "approvalThreshold": float(rules.get("require_approval_above", 0) or 0),
+                    "verifiedSellerOnly": bool(rules.get("merchant_verification_required", True)),
+                })
+            return normalized
+    except Exception:
+        pass
+    return SEED_MANDATES
+
+
+def get_seed_transactions() -> List[Dict[str, Any]]:
+    try:
+        decisions = policy_engine._connect().execute("SELECT full_result_json FROM policy_decisions ORDER BY created_at DESC LIMIT 10").fetchall()
+        if decisions:
+            transactions = []
+            for row in decisions:
+                payload = row[0]
+                if isinstance(payload, str):
+                    data = __import__('json').loads(payload)
+                else:
+                    data = payload
+                transactions.append({
+                    "id": data.get("decision_id") or data.get("transaction_id") or data.get("mandate_id"),
+                    "merchant": data.get("merchant_name") or "Unknown merchant",
+                    "category": data.get("product_category") or "General",
+                    "amount": float(data.get("requested_amount") or 0),
+                    "status": data.get("decision") or "Pending",
+                    "date": data.get("transaction_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "agent": "Policy Judge",
+                    "paymentReference": data.get("decision_id") or data.get("mandate_id"),
+                    "description": data.get("reason") or "Policy decision record",
+                })
+            if transactions:
+                return transactions
+    except Exception:
+        pass
+    return SEED_TRANSACTIONS
 
 SEED_SETTINGS = {
     "fullName": "Zentro Demo User",
@@ -125,6 +184,44 @@ class PolicyMandateUpdateRequest(BaseModel):
 policy_engine = PolicyDecisionEngine()
 
 
+class GeminiService:
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        self.api_key = (api_key or os.getenv("GEMINI_API_KEY") or os.getenv("ZENTRO_GEMINI_API_KEY") or AGENT_CONFIG.get("gemini_api_key", "")).strip()
+        self.model = (model or os.getenv("GEMINI_MODEL") or AGENT_CONFIG.get("model") or "gemini-3.8-flash").strip()
+        self.client = None
+        if self.api_key:
+            try:
+                from google import genai
+                self.client = genai.Client(api_key=self.api_key)
+            except Exception:
+                self.client = None
+
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
+    def get_status(self) -> Dict[str, Any]:
+        if not self.api_key:
+            return {"configured": False, "connected": False, "model": self.model, "status": "missing_api_key"}
+        try:
+            response = self.client.models.generate_content(model=self.model, contents="Reply with exactly: GEMINI_OK") if self.client else None
+            if response is None:
+                return {"configured": True, "connected": False, "model": self.model, "status": "client_unavailable"}
+            text = (getattr(response, "text", "") or "").strip()
+            connected = bool(text) and "GEMINI_OK" in text.upper()
+            return {"configured": True, "connected": connected, "model": self.model, "status": "connected" if connected else "response_mismatch"}
+        except Exception as exc:
+            return {"configured": True, "connected": False, "model": self.model, "status": "error", "error": str(type(exc).__name__)}
+
+    def generate_text(self, prompt: str) -> str:
+        if not self.client or not self.api_key:
+            raise RuntimeError("Gemini is not configured.")
+        response = self.client.models.generate_content(model=self.model, contents=prompt)
+        return getattr(response, "text", str(response)).strip()
+
+
+gemini_service = GeminiService()
+
+
 def current_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -170,7 +267,9 @@ def build_agent_statuses() -> List[Dict[str, Any]]:
 
 
 def build_dashboard_payload() -> Dict[str, Any]:
-    recent_transactions = [normalize_transaction(txn) for txn in SEED_TRANSACTIONS[:5]]
+    mandates = get_seed_mandates()
+    recent_transactions = [normalize_transaction(txn) for txn in get_seed_transactions()[:5]]
+    data_source = 'persisted' if len(get_seed_transactions()) > 0 and get_seed_transactions() != SEED_TRANSACTIONS else 'demo'
     return {
         "summaryCards": [
             {"label": "Total spend", "value": "$32,600", "note": "Across all live accounts", "accent": False},
@@ -187,7 +286,7 @@ def build_dashboard_payload() -> Dict[str, Any]:
             {"name": "Jul", "amount": 3300},
             {"name": "Aug", "amount": 3600},
         ],
-        "mandates": SEED_MANDATES,
+        "mandates": mandates,
         "recentTransactions": recent_transactions,
         "agentActivity": build_agent_statuses(),
         "categoryData": [
@@ -196,7 +295,7 @@ def build_dashboard_payload() -> Dict[str, Any]:
             {"name": "Entertainment", "value": 22},
             {"name": "Other", "value": 15},
         ],
-        "dataSource": "demo",
+        "dataSource": data_source,
     }
 
 
@@ -245,7 +344,12 @@ def build_analytics_payload() -> Dict[str, Any]:
 
 @app.get("/api/health")
 def health() -> Dict[str, Any]:
-    return {"status": "ok", "service": "Zentro API"}
+    return {"status": "ok", "service": "Zentro API", "gemini": gemini_service.get_status()}
+
+
+@app.get("/api/gemini/status")
+def gemini_status() -> Dict[str, Any]:
+    return {"success": True, "gemini": gemini_service.get_status()}
 
 
 @app.get("/api/dashboard")
@@ -260,13 +364,15 @@ def agents() -> Dict[str, Any]:
 
 @app.get("/api/transactions")
 def transactions() -> Dict[str, Any]:
-    payload = [normalize_transaction(transaction) for transaction in SEED_TRANSACTIONS]
-    return {"transactions": payload, "count": len(payload), "dataSource": "demo"}
+    source_transactions = get_seed_transactions()
+    payload = [normalize_transaction(transaction) for transaction in source_transactions]
+    return {"transactions": payload, "count": len(payload), "dataSource": "persisted" if source_transactions != SEED_TRANSACTIONS else "demo"}
 
 
 @app.get("/api/mandates")
 def mandates() -> Dict[str, Any]:
-    return {"mandates": SEED_MANDATES, "count": len(SEED_MANDATES)}
+    mandate_list = get_seed_mandates()
+    return {"mandates": mandate_list, "count": len(mandate_list)}
 
 
 @app.get("/api/analytics")
@@ -345,10 +451,11 @@ def parse_policy_mandate(payload: PolicyMandateParseRequest) -> Dict[str, Any]:
     if not mandate_text:
         raise HTTPException(status_code=400, detail="Please provide a valid spending mandate.")
     try:
-        rules = PolicyMandateParser().parse(mandate_text)
+        parser = PolicyMandateParser(api_key=gemini_service.api_key, gemini_client=gemini_service.client)
+        rules = parser.parse(mandate_text)
     except PolicyValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"success": True, "rules": rules, "parsed_by": "backend.policy_engine"}
+    return {"success": True, "rules": rules, "parsed_by": "backend.policy_engine", "gemini_configured": gemini_service.is_configured()}
 
 
 @app.post("/api/policy/evaluate")
@@ -417,24 +524,14 @@ def chat_message(payload: ChatRequest) -> Dict[str, Any]:
     message = (payload.message or "").strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
-    gemini_key = get_gemini_key()
-    if gemini_key:
+    if gemini_service.is_configured():
         try:
-            if genai is not None:
-                genai.configure(api_key=gemini_key)
-                model = genai.GenerativeModel("gemini-3.5-flash")
-                response = model.generate_content("You are Zentro AI support. Use the backend context to answer: " + message)
-                answer = response.text.strip() if hasattr(response, "text") else str(response)
-                return {"answer": answer, "dataUnavailable": False, "lastUpdated": current_timestamp(), "source": "gemini-live"}
-            if google_genai is not None:
-                client = google_genai.Client(api_key=gemini_key)
-                response = client.models.generate_content(model="gemini-3.5-flash", contents="You are Zentro AI support. Use the backend context to answer: " + message)
-                answer = getattr(response, "text", str(response))
-                return {"answer": answer, "dataUnavailable": False, "lastUpdated": current_timestamp(), "source": "gemini-live"}
+            answer = gemini_service.generate_text("You are Zentro AI support. Use the backend context to answer: " + message)
+            return {"answer": answer, "dataUnavailable": False, "lastUpdated": current_timestamp(), "source": "gemini-live", "gemini": gemini_service.get_status()}
         except Exception:
             pass
     summary = "Your current approval risk is moderate. One transaction is blocked and another is escalated, while the rest remain within policy."
-    return {"answer": "Live Gemini connectivity is currently unavailable because the backend is missing a valid GEMINI_API_KEY. I can still provide the latest cached financial context. Context: " + summary, "dataUnavailable": True, "lastUpdated": current_timestamp(), "source": "backend-cache"}
+    return {"answer": "Live Gemini connectivity is currently unavailable. I can still provide cached financial context. Context: " + summary, "dataUnavailable": True, "lastUpdated": current_timestamp(), "source": "backend-cache", "gemini": gemini_service.get_status()}
 
 
 if __name__ == "__main__":
