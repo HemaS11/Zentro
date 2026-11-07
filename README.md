@@ -134,6 +134,7 @@ cd Zentro-1
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
 pip install -r ai-agents/requirements.txt
 ```
@@ -144,71 +145,105 @@ pip install -r ai-agents/requirements.txt
 npm install
 ```
 
-## Gemini API Configuration
+### 4) Configure environment variables
 
-Create a root `.env` file based on the provided `.env.example`:
+Create a root `.env` file based on `.env.example`. Keep the file local-only and do not commit secrets.
+
+```bash
+cp .env.example .env
+```
+
+Minimum values:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-The application also supports alternate environment names:
-
-```env
 ZENTRO_GEMINI_API_KEY=your_gemini_api_key_here
+AI_PROVIDER=gemini
+GEMINI_MODEL=gemini-2.0-flash
 ```
 
-If no valid API key is present, the app still runs in cache/demo mode and uses backend fallback responses.
+If no valid API key is present, the app falls back to the cache/demo mode and remains safe, but it will not call Gemini.
 
 ## Running the Project
 
 ### Start the backend
 
-From the project root:
-
 ```bash
-python3 -m uvicorn backend.server:app --host 0.0.0.0 --port 8000
+cd /Users/hemas/Zentro-1
+source .venv/bin/activate
+uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Start the frontend
 
 ```bash
-npm run dev -- --host 0.0.0.0
+cd /Users/hemas/Zentro-1
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-Then open the app in the browser using the local Vite address shown in the terminal output.
+The frontend is configured to proxy `/api` and `/chat` requests to `http://127.0.0.1:8000`.
 
 ## API Documentation
 
-The backend exposes JSON endpoints through FastAPI.
+FastAPI exposes interactive docs at:
+
+- `http://127.0.0.1:8000/docs`
+- `http://127.0.0.1:8000/redoc`
 
 ### Core endpoints
 
 - `GET /api/health` — health check
 - `GET /api/dashboard` — dashboard summary data
 - `GET /api/agents` — agent activity metadata
-- `GET /api/transactions` — transaction list
+- `GET /api/transactions` — transaction history
 - `GET /api/mandates` — mandate definitions
 - `GET /api/analytics` — analytics summary and trends
 - `GET /api/settings` — settings payload
+- `POST /api/settings` — save settings
+- `POST /api/mandates` — create a mandate
+- `PATCH /api/mandates/{mandate_id}` — toggle mandate activity
+- `POST /api/policy/parse-mandate` — parse a natural-language mandate into structured rules
+- `POST /api/policy/evaluate` — evaluate a purchase against a mandate
+- `POST /api/agents/evaluate` — run the multi-agent review pipeline
+- `POST /chat/message` — AI support chat with a Gemini fallback
 
-### Write/update endpoints
+## Troubleshooting
 
-- `POST /api/settings` — updates application settings
-- `POST /api/mandates` — creates a mandate
-- `PATCH /api/mandates/{mandate_id}` — toggles mandate activity
-- `POST /api/agents/evaluate` — evaluates a transaction through the coordinator and all agents
-- `POST /api/agents/parse-mandate` — parses a mandate text input into structured policy data
-- `POST /chat/message` — chat endpoint with Gemini fallback
+### Backend connection refused from the frontend
+
+Check that the backend is running on port 8000 and that Vite is proxying `/api` and `/chat` to `http://127.0.0.1:8000`.
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+If this fails, start the backend first.
+
+### Missing dependency errors
+
+```bash
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
+python -m pip install -r ai-agents/requirements.txt
+```
+
+### Gemini unavailable
+
+The app remains operational without a key, but the AI chatbot and Gemini-backed agents will fall back to cached/demo responses. Do not hard-code keys in frontend code or commit them to the repo.
 
 ## How It Works
 
-1. The user interacts with the dashboard or transaction flows in the React frontend.
-2. The frontend calls the FastAPI service for dashboard, analytics, mandate, and transaction data.
-3. The backend runs the multi-agent evaluation pipeline through the coordinator.
-4. Each agent contributes a decision, risk signal, and policy context.
-5. The deterministic backend policy engine synthesizes the final authorization decision.
-6. If the workflow requires escalation, the system marks the requirement for human approval before proceeding.
+1. The React frontend requests data from the FastAPI backend.
+2. The backend loads policy state from SQLite and serves dashboard, transaction, and mandate data.
+3. The agent coordinator evaluates the transaction using the configured agents.
+4. The backend policy engine makes the final deterministic decision and stores the result.
+5. If the rules require escalation, the system requests human approval rather than auto-authorizing the payment.
+
+## Notes
+
+- Python 3.11+ is strongly recommended for the latest Google client compatibility.
+- This project keeps the deterministic policy engine as the final authority.
+- AI outputs are advisory and never automatically authorize a payment.
 
 ## Team Contributors
 

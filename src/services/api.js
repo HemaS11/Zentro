@@ -1,23 +1,56 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+function resolveUrl(url) {
+  if (!url) {
+    return url;
+  }
+
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+    return url;
+  }
+
+  return `${API_BASE_URL}${url}`;
+}
+
 export async function requestJSON(url, options = {}) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
-    ...options
-  });
+  const resolvedUrl = resolveUrl(url);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || 'Request failed');
+  try {
+    const response = await fetch(resolvedUrl, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      },
+      ...options
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let message = 'Request failed';
+      try {
+        const parsed = JSON.parse(errorText);
+        message = parsed.detail || parsed.message || parsed.error || message;
+      } catch {
+        if (errorText) {
+          message = errorText;
+        }
+      }
+      throw new Error(message);
+    }
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Unable to reach the Zentro backend. Check that the API server is running on port 8000.');
+    }
+
+    throw error;
   }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
 }
 
 export function fetchJSON(url, options = {}) {

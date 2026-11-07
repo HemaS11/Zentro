@@ -39,7 +39,7 @@ class MandateCreator:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.api_key = self.config.get("gemini_api_key", "")
-        self.model = self.config.get("model", "gemini-3.5-flash")
+        self.model = self.config.get("model", "gemini-3.8-flash")
         self.client = genai.Client(api_key=self.api_key) if self.api_key and genai else None
 
     def _extract_amount(self, text: str, *keywords: str) -> Optional[float]:

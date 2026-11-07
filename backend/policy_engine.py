@@ -7,6 +7,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+try:
+    from config import get_agent_config
+except Exception:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ai-agents"))
+    from config import get_agent_config
+
 SAFE_RULE_KEYS = {
     "max_transaction_amount",
     "allowed_categories",
@@ -63,10 +69,24 @@ class PolicyValidationError(ValueError):
     """Raised when a mandate or purchase payload violates the policy schema."""
 
 
+class MandateParsingError(PolicyValidationError):
+    """Raised when live Gemini parsing fails or returns unusable data."""
+
+    def __init__(self, message: str, error_type: str = "invalid_model_response", details: Optional[str] = None):
+        super().__init__(message)
+        self.error_type = error_type
+        self.details = details
+
+
 class PolicyMandateParser:
     def __init__(self, api_key: Optional[str] = None, gemini_client: Any = None):
         self.api_key = (api_key or os.getenv("GEMINI_API_KEY") or os.getenv("ZENTRO_GEMINI_API_KEY") or "").strip()
         self.gemini_client = gemini_client
+        self.model = (
+            os.getenv("GEMINI_MODEL")
+            or get_agent_config().get("model")
+            or "gemini-3.8-flash"
+        ).strip()
 
     @staticmethod
     def _coerce_float(value: Any) -> Optional[float]:
@@ -222,57 +242,6 @@ class PolicyMandateParser:
 
         return rules
 
-    def _call_gemini(self, mandate_text: str) -> Optional[Dict[str, Any]]:
-        if not self.api_key and self.gemini_client is None:
-            return None
-
-        try:
-            if self.gemini_client is not None:
-                if hasattr(self.gemini_client, "models"):
-                    response = self.gemini_client.models.generate_content(
-                        model="gemini-2.0-flash",
-                        contents=[
-                            {
-                                "text": (
-                                    "Convert this spending mandate into valid JSON with only these keys: "
-                                    "max_transaction_amount, allowed_categories, blocked_categories, "
-                                    "allowed_days, require_approval_above, currency, merchant_verification_required, "
-                                    "require_user_confirmation, require_user_confirmation_for, unknown_merchant_blocked, "
-                                    "allow_unknown_merchants, expires_on, seller_restrictions. "
-                                    "Return JSON only."
-                                )
-                            },
-                            {"text": mandate_text},
-                        ],
-                    )
-                    raw = getattr(response, "text", "") or str(response)
-                    return self._normalize_response(raw)
-                if hasattr(self.gemini_client, "generate_content"):
-                    response = self.gemini_client.generate_content(
-                        "Convert this spending mandate into valid JSON. Return JSON only. Mandate: " + mandate_text
-                    )
-                    raw = getattr(response, "text", "") or str(response)
-                    return self._normalize_response(raw)
-            try:
-                import google.generativeai as genai
-            except Exception:
-                return None
-
-            genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            response = model.generate_content(
-                "Return only a valid JSON object for this mandate; use no markdown and no extra explanation. "
-                "Rules schema: max_transaction_amount, allowed_categories, blocked_categories, allowed_days, "
-                "require_approval_above, currency, merchant_verification_required, require_user_confirmation, "
-                "require_user_confirmation_for, unknown_merchant_blocked, allow_unknown_merchants, expires_on, seller_restrictions. "
-                "Mandate: " + mandate_text,
-                generation_config={"temperature": 0.1, "response_mime_type": "application/json"},
-            )
-            raw = getattr(response, "text", "") or str(response)
-            return self._normalize_response(raw)
-        except Exception:
-            return None
-
     @staticmethod
     def _normalize_response(raw_response: Any) -> Dict[str, Any]:
         if raw_response is None:
@@ -296,6 +265,106 @@ class PolicyMandateParser:
         if not isinstance(payload, dict):
             return {}
         return payload
+
+    @staticmethod
+    def _classify_gemini_error(exc: Exception) -> str:
+        message = str(exc).lower()
+        status_code = getattr(exc, "status_code", None)
+        if status_code in {401, 403} or any(token in message for token in ("unauthorized", "forbidden", "api key", "authentication", "permission denied")):
+            return "authentication_error"
+        if status_code == 429 or any(token in message for token in ("quota", "rate limit", "resource exhausted")):
+            return "quota_error"
+        if status_code in {408, 504} or any(token in message for token in ("timeout", "timed out")):
+            return "timeout"
+        if any(token in message for token in ("network", "connection", "dns", "ssl", "unreachable")):
+            return "network_error"
+        if any(token in message for token in ("model", "not found", "unsupported", "invalid model")):
+            return "invalid_model_response"
+        return "invalid_model_response"
+
+    @staticmethod
+    def _safe_error_message(error_type: str) -> str:
+        messages = {
+            "missing_api_key": "Live Gemini mandate parsing requires a valid GEMINI_API_KEY.",
+            "authentication_error": "Gemini authentication failed. Please check the configured API key.",
+            "quota_error": "Gemini API quota has been exhausted for this request.",
+            "timeout": "Gemini request timed out while parsing the mandate.",
+            "network_error": "Gemini network error while parsing the mandate.",
+            "invalid_json": "Gemini returned malformed JSON for the mandate parser.",
+            "invalid_mandate_schema": "Gemini returned an incomplete or invalid mandate schema.",
+            "invalid_model_response": "Gemini returned an unusable response for mandate parsing.",
+            "empty_response": "Gemini returned an empty response for mandate parsing.",
+        }
+        return messages.get(error_type, "Gemini mandate parsing failed.")
+
+    def _call_gemini(self, mandate_text: str) -> Dict[str, Any]:
+        if not self.api_key and self.gemini_client is None:
+            raise MandateParsingError(self._safe_error_message("missing_api_key"), "missing_api_key")
+
+        try:
+            if self.gemini_client is not None:
+                if hasattr(self.gemini_client, "models"):
+                    response = self.gemini_client.models.generate_content(
+                        model=self.model,
+                        contents=[
+                            {
+                                "text": (
+                                    "Convert this spending mandate into valid JSON with only these keys: "
+                                    "max_transaction_amount, allowed_categories, blocked_categories, "
+                                    "allowed_days, require_approval_above, currency, merchant_verification_required, "
+                                    "require_user_confirmation, require_user_confirmation_for, unknown_merchant_blocked, "
+                                    "allow_unknown_merchants, expires_on, seller_restrictions. "
+                                    "Return JSON only."
+                                )
+                            },
+                            {"text": mandate_text},
+                        ],
+                    )
+                    raw = getattr(response, "text", "") or str(response)
+                    payload = self._normalize_response(raw)
+                    if not payload:
+                        raise MandateParsingError(self._safe_error_message("empty_response"), "empty_response")
+                    if not any(key in payload for key in SAFE_RULE_KEYS):
+                        raise MandateParsingError(self._safe_error_message("invalid_mandate_schema"), "invalid_mandate_schema")
+                    return payload
+                if hasattr(self.gemini_client, "generate_content"):
+                    response = self.gemini_client.generate_content(
+                        "Convert this spending mandate into valid JSON. Return JSON only. Mandate: " + mandate_text
+                    )
+                    raw = getattr(response, "text", "") or str(response)
+                    payload = self._normalize_response(raw)
+                    if not payload:
+                        raise MandateParsingError(self._safe_error_message("empty_response"), "empty_response")
+                    if not any(key in payload for key in SAFE_RULE_KEYS):
+                        raise MandateParsingError(self._safe_error_message("invalid_mandate_schema"), "invalid_mandate_schema")
+                    return payload
+            try:
+                import google.generativeai as genai
+            except Exception as exc:
+                raise MandateParsingError(self._safe_error_message("missing_api_key"), "missing_api_key") from exc
+
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel(self.model)
+            response = model.generate_content(
+                "Return only a valid JSON object for this mandate; use no markdown and no extra explanation. "
+                "Rules schema: max_transaction_amount, allowed_categories, blocked_categories, allowed_days, "
+                "require_approval_above, currency, merchant_verification_required, require_user_confirmation, "
+                "require_user_confirmation_for, unknown_merchant_blocked, allow_unknown_merchants, expires_on, seller_restrictions. "
+                "Mandate: " + mandate_text,
+                generation_config={"temperature": 0.1, "response_mime_type": "application/json"},
+            )
+            raw = getattr(response, "text", "") or str(response)
+            payload = self._normalize_response(raw)
+            if not payload:
+                raise MandateParsingError(self._safe_error_message("empty_response"), "empty_response")
+            if not any(key in payload for key in SAFE_RULE_KEYS):
+                raise MandateParsingError(self._safe_error_message("invalid_mandate_schema"), "invalid_mandate_schema")
+            return payload
+        except MandateParsingError:
+            raise
+        except Exception as exc:
+            error_type = self._classify_gemini_error(exc)
+            raise MandateParsingError(self._safe_error_message(error_type), error_type) from exc
 
     def validate_rules(self, rules: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(rules, dict):
@@ -350,16 +419,30 @@ class PolicyMandateParser:
         if not text:
             raise PolicyValidationError("Mandate text is required.")
 
-        fallback = self._fallback_rules(text)
-        if self.api_key or self.gemini_client is not None:
-            try:
-                ai_result = self._call_gemini(text)
-                if ai_result:
-                    merged = self.validate_rules({**fallback, **ai_result})
-                    return merged
-            except Exception:
-                pass
-        return self.validate_rules(fallback)
+        if not self.api_key and self.gemini_client is None:
+            raise MandateParsingError(self._safe_error_message("missing_api_key"), "missing_api_key")
+
+        ai_result = self._call_gemini(text)
+        if not ai_result:
+            raise MandateParsingError(self._safe_error_message("invalid_model_response"), "invalid_model_response")
+
+        validated = self.validate_rules(ai_result)
+        return validated
+
+    def parse_with_fallback(self, mandate_text: str) -> Dict[str, Any]:
+        text = (mandate_text or "").strip()
+        if not text:
+            raise PolicyValidationError("Mandate text is required.")
+        try:
+            return {"source": "gemini", "rules": self.parse(text)}
+        except MandateParsingError as exc:
+            fallback_rules = self.validate_rules(self._fallback_rules(text))
+            return {
+                "source": "fallback",
+                "warning": str(exc),
+                "error_type": exc.error_type,
+                "rules": fallback_rules,
+            }
 
 
 class PolicyDecisionEngine:
@@ -579,15 +662,28 @@ class PolicyDecisionEngine:
         allowed_days = rules.get("allowed_days") or []
         allowed_categories = rules.get("allowed_categories") or []
         blocked_categories = rules.get("blocked_categories") or []
+        allowed_category_names = {str(item).lower() for item in allowed_categories}
+        blocked_category_names = {str(item).lower() for item in blocked_categories}
+        known_category_names = set(CATEGORY_ALIASES.values()) | {
+            "food", "electronics", "travel", "furniture", "software", "healthcare",
+            "clothing", "jewelry", "books", "education"
+        }
         violations: List[str] = []
         block = False
         escalate = False
         reason = "Purchase follows all active mandate rules."
 
-        if allowed_categories and category_name not in {item.lower() for item in allowed_categories}:
-            block = True
-            violations.append("Product category is not allowed by the active mandate")
-        if blocked_categories and category_name in {item.lower() for item in blocked_categories}:
+        if allowed_categories and category_name not in allowed_category_names:
+            if category_name in blocked_category_names:
+                block = True
+                violations.append("Product category is explicitly blocked by the mandate")
+            elif category_name not in known_category_names:
+                escalate = True
+                violations.append("Product category is ambiguous and requires clarification")
+            else:
+                block = True
+                violations.append("Product category is not allowed by the active mandate")
+        if blocked_categories and category_name in blocked_category_names:
             block = True
             violations.append("Product category is explicitly blocked by the mandate")
         if max_allowed is not None and requested_amount > max_allowed:
