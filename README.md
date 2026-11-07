@@ -220,3 +220,18 @@ The backend exposes JSON endpoints through FastAPI.
 ## Notes
 
 This project is implemented as a working AI policy review and dashboard prototype with a deterministic safety boundary. The AI agents provide analysis and recommendations, but the backend policy logic remains the decision authority and human approval is required where escalation is configured.
+
+## Mandate Pay frontend
+
+The Mandate Pay React + TypeScript frontend is available as a separate page at `/mandate-pay.html`. It has its own entry point and stylesheet so the existing Zentro application, backend, and routes remain intact.
+
+Configure these Vite environment variables in a local `.env` file using your Supabase project URL and publishable (anon) key:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Never put a Supabase service-role key in the frontend. The Mandate Pay client uses the signed-in user's session and expects the `public.mandates` table's Row Level Security policies to restrict access by `user_id`.
+
+Run the existing Vite development server with `npm run dev`, then open `http://localhost:5173/mandate-pay.html`. For password recovery, allow that local URL in Supabase Authentication's redirect URL settings. Production deployments must also allow their Mandate Pay page URL.
+
+The shared `npm run build` type-checks Mandate Pay and builds both pages. `npm run lint:mandate-pay` runs Oxlint on its source, and `npm run typecheck:mandate-pay` runs its TypeScript check independently.
