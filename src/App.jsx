@@ -101,6 +101,10 @@ function AppShell() {
                 <span>{item.label}</span>
               </NavLink>
             ))}
+            <a className="nav-item" href="/mandate-pay.html">
+              <span className="nav-icon" aria-hidden="true">◈</span>
+              <span>Mandate Pay</span>
+            </a>
           </div>
         </nav>
 

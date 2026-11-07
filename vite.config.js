@@ -17,6 +17,11 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    rollupOptions: {
+      input: ['index.html', 'mandate-pay.html']
+    }
+  },
   preview: {
     host: '0.0.0.0',
     port: 4173
