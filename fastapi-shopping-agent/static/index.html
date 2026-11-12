@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zentro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ivory:#F5EFE4;--mocha:#6F4E37;--pista:#A8BFA0;--gold:#C9A66B;--espresso:#33251C;--beige:#E6D9C5;--sage:#E5EBDD;--taupe:#817467}
+*{box-sizing:border-box;margin:0}
+body{font:15px/1.55 Inter,system-ui,sans-serif;background:var(--ivory);color:var(--espresso)}
+h1,h2,.logo,.price,.big{font-family:'Playfair Display',Georgia,serif;font-weight:600}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+aside{background:var(--mocha);color:var(--ivory);padding:24px 16px;display:flex;flex-direction:column;gap:26px;position:sticky;top:0;height:100vh}
+.logo{font-size:27px;padding:0 12px}
+nav{display:grid;gap:4px}
+nav button{display:flex;gap:10px;align-items:center;width:100%;padding:10px 12px;border:0;border-radius:10px;background:none;color:var(--ivory);text-align:left}
+nav button:hover{background:rgba(245,239,228,.12)}
+nav button[aria-current=true]{background:var(--pista);color:var(--espresso);font-weight:600}
+svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.upgrade{margin-top:auto;background:var(--espresso);border-radius:14px;padding:14px;font-size:13px;display:grid;gap:10px}
+.upgrade p{color:var(--beige)}
+.upgrade div{display:flex;justify-content:space-between}
+.tag{font-size:11px;font-weight:600;color:var(--gold)}
+.btn{padding:11px 18px;border:0;border-radius:12px;background:var(--mocha);color:var(--ivory);font-weight:600}
+.btn:hover{background:var(--espresso)}
+.btn.gold{background:var(--gold);color:var(--espresso)}
+.btn.gold:hover{background:var(--beige)}
+.btn.ghost{background:none;border:1px solid var(--mocha);color:var(--mocha);padding:7px 13px;font-size:14px}
+.btn.ghost:hover{background:var(--mocha);color:var(--ivory)}
+.btn:disabled{opacity:.6;cursor:wait}
+main{padding:26px 38px 60px;max-width:1160px;width:100%}
+.top-bar{display:flex;justify-content:space-between;align-items:start;gap:16px;margin-bottom:22px}
+h1{font-size:30px;color:var(--mocha);line-height:1.2}
+.sub{color:var(--taupe)}
+.tools{display:flex;gap:10px;align-items:center}
+.tools input{width:230px;padding:9px 14px;border:1px solid var(--beige);border-radius:999px;background:var(--sage);font:inherit;color:var(--espresso)}
+.icon-btn{position:relative;width:38px;height:38px;border-radius:50%;border:1px solid var(--beige);background:none;color:var(--mocha);display:grid;place-items:center}
+.icon-btn i{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--pista);display:grid;place-items:center;font-weight:600}
+.search{display:flex;gap:10px;margin:4px 0 12px}
+.search input,.fi{flex:1;padding:14px 16px;border:1px solid var(--beige);border-radius:12px;background:var(--sage);font:inherit;color:var(--espresso)}
+::placeholder{color:var(--taupe)}
+.chips,.pills{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:6px 12px;border:1px solid var(--beige);border-radius:999px;background:none;color:var(--taupe);font-size:13px}
+.chip:hover,.chip[aria-pressed=true]{background:var(--pista);color:var(--espresso)}
+.pill{padding:3px 10px;border-radius:999px;background:var(--sage);border:1px solid var(--beige);font-size:13px}
+h2{font-size:20px;color:var(--mocha);margin:28px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.card{background:var(--sage);border:1px solid var(--beige);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.card.best{border:2px solid var(--gold)}
+.card.off{opacity:.75}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.cat,.src{font-size:13px;color:var(--taupe)}
+.src{display:block;font-size:12px;margin-top:3px}
+.badge{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--gold);color:var(--espresso);white-space:nowrap}
+.badge.ok{background:var(--pista)}
+.card h3{font-size:16px;line-height:1.35}
+.price{font-size:26px;color:var(--mocha)}
+.big{font-size:32px;color:var(--mocha);line-height:1.1}
+.desc{color:var(--taupe);font-size:14px}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;padding-top:10px;border-top:1px solid var(--beige);font-size:14px}
+.meta a{color:var(--taupe)}
+.star{color:var(--gold)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--taupe);margin-right:8px}
+.dot.on{background:var(--pista)}
+.decision{border-radius:12px;padding:10px 12px;font-size:14px;background:var(--ivory);border:1px solid var(--beige)}
+.verdict{display:inline-block;font-weight:600;padding:2px 10px;border-radius:999px;margin-right:6px;font-size:13px}
+.verdict.APPROVE{background:var(--pista);color:var(--espresso)}
+.verdict.ESCALATE{background:var(--gold);color:var(--espresso)}
+.verdict.BLOCK{background:var(--mocha);color:var(--ivory)}
+.out{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--beige);font-size:14px}
+.out>span:last-child{color:var(--taupe);text-align:right}
+.bar-l{display:flex;justify-content:space-between;font-size:13px;color:var(--taupe);margin-top:8px}
+.track{height:8px;border-radius:99px;background:var(--beige);overflow:hidden;margin-top:4px}
+.track i{display:block;height:100%;background:var(--pista)}
+.track.ESCALATE i{background:var(--gold)}
+.track.BLOCK i{background:var(--mocha)}
+.wrap{overflow-x:auto;border:1px solid var(--beige);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--beige)}
+th{color:var(--taupe);font-weight:500;background:var(--sage)}
+tr.best td:first-child{box-shadow:inset 3px 0 var(--gold)}
+.empty{padding:30px;border:1px dashed var(--beige);border-radius:14px;color:var(--taupe);display:grid;gap:12px;justify-items:start}
+.err{color:var(--mocha);font-weight:600;margin-top:16px}
+.row-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.row-bar .fi{max-width:280px;flex:none;padding:9px 14px}
+details{background:var(--sage);border:1px solid var(--beige);border-radius:14px;padding:14px 18px;margin-bottom:12px}
+summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:600;gap:10px}
+pre{margin-top:12px;background:var(--espresso);color:var(--beige);padding:14px;border-radius:10px;font-size:12.5px;overflow-x:auto}
+.agent .stat{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--beige)}
+.agent .stat b{display:block;font-size:20px;font-family:'Playfair Display',Georgia,serif;color:var(--mocha)}
+.agent .head{display:flex;gap:10px;align-items:center;font-weight:600}
+.agent{cursor:pointer}
+.agent:hover{border-color:var(--gold)}
+.notice{background:var(--sage);border:1px solid var(--beige);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--taupe);margin-bottom:16px}
+.mform{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:14px;align-items:end}
+.mform label{display:grid;gap:4px;font-size:13px;color:var(--taupe)}
+.mform .fi{max-width:none;padding:10px 12px}
+@media(max-width:820px){
+ .app{grid-template-columns:1fr}
+ aside{position:static;height:auto;gap:12px;padding:16px}
+ nav{grid-auto-flow:column;overflow-x:auto}
+ .upgrade{display:none}
+ main{padding:20px 16px 50px}
+ .two{grid-template-columns:1fr}
+ .tools input{width:130px}
+ .search{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="app">
+ <aside>
+  <div class="logo">Zentro</div>
+  <nav id="nav"></nav>
+  <div class="upgrade"><div><b>Go live</b><span class="tag">PRO</span></div>
+   <p>Use Gemini to understand requests and Mandate Pay to authorize purchases.</p>
+   <button class="btn gold" data-act="goto" data-v="settings">Open settings</button></div>
+ </aside>
+ <main>
+  <div class="top-bar">
+   <div><h1 id="title"></h1><p class="sub" id="sub"></p></div>
+   <div class="tools">
+    <input id="tsearch" type="search" placeholder="Search transactions…" aria-label="Search transactions">
+    <button class="icon-btn" id="bell" data-act="bell" aria-label="Escalated purchases"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20h4"/></svg><i hidden></i></button>
+    <div class="avatar" title="Ponnanna">P</div>
+   </div>
+  </div>
+  <div id="page"></div>
+ </main>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inr=n=>'₹'+new Intl.NumberFormat('en-IN').format(Math.round(n));
+const ICON={dashboard:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+ research:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+ agents:'<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/>',
+ transactions:'<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+ mandates:'<path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6z"/>',
+ analytics:'<path d="M5 20V10M12 20V4M19 20v-7"/>',
+ settings:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'};
+const svg=n=>`<svg viewBox="0 0 24 24">${ICON[n]}</svg>`;
+const PAGES={dashboard:['Dashboard','Overview of your AI payment agents'],research:['Product Research','Search, filter and compare products against your mandates'],agents:['AI Agents','Manage your intelligent agents'],transactions:['Transactions','Every product the Policy Engine has checked'],mandates:['Mandates','Spending rules the Policy Engine enforces'],analytics:['Analytics','Performance and spending insights'],settings:['Settings','Connections and preferences']};
+const NAMES={dashboard:'Dashboard',research:'Product Research',agents:'AI Agents',transactions:'Transactions',mandates:'Mandates',analytics:'Analytics',settings:'Settings'};
+const AGENTS=[
+ {id:'mandate',name:'Mandate Creator',icon:'mandates',live:1,desc:'Creates and manages spending mandates from your rules.'},
+ {id:'research',name:'Product Research',icon:'research',live:1,desc:'Finds products, filters by budget and compares the best options.'},
+ {id:'policy',name:'Policy Judge',icon:'agents',live:1,desc:'Approves, blocks or escalates each purchase against your mandates.'},
+ {id:'risk',name:'Risk Detection',icon:'analytics',live:1,desc:'Flags unusual purchases and anomalous amounts.'},
+ {id:'receipt',name:'Receipt Auditor',icon:'transactions',live:1,desc:'Verifies receipts and invoices after payment.'}];
+const EX=['Find laptops under ₹50,000','Find a textbook under ₹1,000','Find wireless headphones under ₹2,000','Find engineering textbooks'];
+const LABEL={APPROVE:'Approved',BLOCK:'Blocked',ESCALATE:'Escalated',WAIT:'Awaiting you'};
+let D={stats:{searches:0,checks:0},transactions:[],mandates:[],last:{},status:{},agents:{}}, view='dashboard', last=null, qv='', dec={}, policyErrors={}, busy=false, filter='All', term='', loadError='';
+
+$('#nav').innerHTML=Object.keys(NAMES).map(k=>`<button data-act="goto" data-v="${k}">${svg(k)}${NAMES[k]}</button>`).join('');
+
+function go(v){view=v;$('#title').textContent=PAGES[v][0];$('#sub').textContent=PAGES[v][1];
+ document.querySelectorAll('#nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.v===v));draw();window.scrollTo(0,0)}
+function draw(){$('#page').innerHTML=(loadError?`<p class="err">${esc(loadError)}</p>`:'')+V[view]();const b=$('#bell i');b.hidden=!D.transactions.some(t=>t.state==='Awaiting you')}
+async function refresh(){try{const r=await fetch('/api/overview');if(!r.ok)throw new Error(`HTTP ${r.status}`);D=await r.json();loadError=''}catch(e){loadError=`Could not load dashboard data: ${e.message}`;console.error(loadError)}draw()}
+
+const empty=(t,b)=>`<div class="empty"><span>${t}</span>${b||''}</div>`;
+const toSearch='<button class="btn" data-act="goto" data-v="research">Search products</button>';
+const vd=d=>`<span class="verdict ${d}">${LABEL[d]||d}</span>`;
+const bar=(l,v,max,t,cls='')=>`<div class="bar-l"><span>${l}</span><span>${t}</span></div><div class="track ${cls}"><i style="width:${max?Math.min(100,v/max*100):0}%"></i></div>`;
+
+function agentStat(a){const g=(D.agents||{})[a.id]||{tasks:0,acc:0};return [[g.tasks.toLocaleString('en-IN'),'Tasks completed'],[g.acc+'%','Accuracy']]}
+const agentCard=a=>{const [x,y]=agentStat(a);return `<article class="card agent" data-act="goto" data-v="${({research:'research',mandate:'mandates',policy:'transactions'})[a.id]||'agents'}">
+ <div class="head">${svg(a.icon)}${a.name}<i class="dot ${a.live?'on':''}" style="margin:0 0 0 auto"></i></div><p class="desc">${a.desc}</p>
+ <div class="stat"><span><b>${x[0]}</b><span class="cat">${x[1]}</span></span><span><b>${y[0]}</b><span class="cat">${y[1]}</span></span></div></article>`};
+const mandateCard=m=>{const p=Math.round(m.spent/m.monthly_budget*100);return `<article class="card"><div class="top"><h3>${esc(m.name)}</h3><span class="badge ok">${m.status}</span></div>
+ <span class="cat">${m.id}</span>${bar('Monthly budget',m.spent,m.monthly_budget,p+'%')}
+ <div class="bar-l"><span>${inr(m.spent)} spent</span><span>${inr(m.monthly_budget)}</span></div>
+ <p class="desc">Up to ${inr(m.max_per_purchase)} per purchase. Your approval is needed above ${inr(m.approval_above)}.</p>
+ <div class="pills">${m.categories.map(c=>`<span class="pill">${c}</span>`).join('')}</div><div class="meta"><span class="cat">Expires ${m.expires}</span></div></article>`};
+const txRow=t=>`<div class="out"><span>${esc(t.product)}<span class="src">${esc(t.id)} · ${esc(t.date)}</span></span><span>${inr(t.amount)} ${vd(t.decision)}<span class="src">${esc(t.state)}</span></span></div>`;
+
+const actions=t=>t.state==='Awaiting you'?`<button class="btn ghost" data-act="resolve" data-id="${t.id}" data-do="allow">Allow</button> <button class="btn ghost" data-act="resolve" data-id="${t.id}" data-do="reject">Reject</button>`:t.state==='Ready to pay'?`<button class="btn" data-act="pay" data-id="${t.id}">Pay now (demo)</button>`:'';
+const decisionBox=d=>`<div class="decision">${vd(d.decision)}${esc(d.reason)}<span class="src">Source: ${esc(d.source)}${d.state?'. Status: '+esc(d.state):''}. The agent recommends; only the Policy Engine decides.</span>${d.risk?`<span class="src">Risk ${d.risk.score}/100 (${d.risk.level}): ${esc(d.risk.note)}</span>`:''}${d.receipt?`<span class="src">Receipt ${esc(d.receipt.invoice)} ${d.receipt.verified?'verified':'needs review'}: ${esc(d.receipt.notes)}</span>`:''}${actions(d)?`<div style="margin-top:10px">${actions(d)}</div>`:''}</div>`;
+function card(p,i){const d=dec[p.id],error=policyErrors[p.id];return `<article class="card ${p.rank===1?'best':''}">
+ <div class="top"><span class="cat">${esc(p.category)}</span><span class="pills">${p.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('')}</span></div>
+ <h3>${esc(p.name)}</h3><div class="price">${inr(p.price)}</div><p class="desc">${esc(p.description)}</p><p class="cat">${esc(p.why_recommended)}</p>
+ <div class="meta"><span><span class="star">★</span> ${p.rating.toFixed(1)} · <a href="${esc(p.link)}" target="_blank" rel="noopener">View product</a></span>
+ ${d?'':`<button class="btn ghost" data-act="check" data-i="${i}">Check with Policy Engine</button>`}</div>
+ ${error?`<p class="err">${esc(error)}</p>`:''}${d?decisionBox(d):''}</article>`}
+
+const V={
+ dashboard(){const s=D.stats,t=D.transactions,ap=t.length?Math.round(t.filter(x=>x.decision==='APPROVE').length/t.length*100)+'%':'–';
+  return `<p class="notice">Showing demo data. Everything you do here (searches, decisions, payments, mandates) is saved until the server restarts.</p><div class="stats">${[[s.searches,'Searches run'],[s.checks,'Policy checks'],[ap,'Approval rate'],[D.status.products||'–','Products in catalog']].map(([n,l])=>`<div class="card"><span class="big">${n}</span><span class="cat">${l}</span></div>`).join('')}</div>
+  <h2>AI Agents</h2><div class="grid">${AGENTS.map(agentCard).join('')}</div>
+  <div class="two"><div><h2>Recent activity</h2>${t.length?t.slice(0,5).map(txRow).join(''):empty('No purchases checked yet. Search for a product, then send it to the Policy Engine.',toSearch)}</div>
+  <div><h2>Active mandates</h2><div class="grid" style="grid-template-columns:1fr">${D.mandates.map(mandateCard).join('')}</div></div></div>`},
+
+ research(){let h=`<form class="search" id="form"><input id="q" aria-label="What do you want to buy?" placeholder="Find laptops under ₹50,000" autocomplete="off" value="${esc(qv)}" required><button class="btn" id="go" ${busy?'disabled':''}>${busy?'Searching…':'Search products'}</button></form>
+  <div class="chips">${EX.map(e=>`<button type="button" class="chip" data-act="chip">${esc(e)}</button>`).join('')}</div>`;
+  if(!last)return h+'<div style="margin-top:18px">'+empty('Describe a product and a budget. The agent searches, filters by price and ranks what is left.')+'</div>';
+  const p=last.parsed,pills=[p.category&&`Category: ${p.category}`,p.max_budget&&`Budget: ${inr(p.max_budget)}`,p.purpose&&`Purpose: ${p.purpose}`,...p.keywords.map(k=>`“${k}”`)].filter(Boolean);
+  h+=`<p class="cat" style="margin-top:22px">Understood as ${pills.map(x=>`<span class="pill">${esc(x)}</span>`).join(' ')||'<span class="pill">no filters</span>'} via ${p.parser==='gemini'?'Gemini':'rule parser'} · ${last.engine}</p>
+   <p class="big" style="font-size:21px;margin:10px 0 0;max-width:70ch">${esc(last.summary)}</p>`;
+  if(last.recommended.length)h+=`<h2>Recommended</h2><div class="grid">${last.recommended.map(card).join('')}</div>
+   <h2>Comparison</h2><div class="wrap"><table><thead><tr><th>Rank</th><th>Product</th><th>Price</th><th>Rating</th><th>Highlights</th></tr></thead><tbody>${last.recommended.map(x=>`<tr class="${x.rank===1?'best':''}"><td>${x.rank}</td><td>${esc(x.name)}</td><td>${inr(x.price)}</td><td>${x.rating.toFixed(1)}</td><td>${esc(x.badges.join(', ')||'–')}</td></tr>`).join('')}</tbody></table></div>`;
+  if(last.excluded.length)h+=`<h2>Excluded</h2>${last.excluded.map(x=>`<div class="out"><span>${esc(x.name)} · ${inr(x.price)}</span><span>${esc(x.reason)}</span></div>`).join('')}`;
+  return h+(last.err?`<p class="err">${esc(last.err)}</p>`:'')},
+
+ agents(){return AGENTS.map(a=>{const l=D.last||{},j={research:l.search,policy:l.decision&&{id:l.decision.id,decision:l.decision.decision,reason:l.decision.reason,source:l.decision.source},risk:l.decision&&l.decision.risk,receipt:l.receipt,mandate:l.mandate}[a.id];
+  const body=a.live?(j?JSON.stringify(j,null,2):'No activity yet.'):'Not connected. This agent belongs to another module and will appear here once it is wired in.';
+  return `<details><summary><span>${a.name}</span><span class="badge ${a.live?'ok':''}">${a.live?'Connected':'Offline'}</span></summary><p class="desc" style="margin-top:8px">${a.desc}</p><pre>${esc(body)}</pre></details>`}).join('')},
+
+ transactions(){const t=D.transactions.filter(x=>(filter==='All'||x.decision===filter||(filter==='WAIT'&&x.state==='Awaiting you'))&&(!term||(x.product+x.id+x.category).toLowerCase().includes(term)));
+  return `<div class="row-bar"><div class="chips">${['All','APPROVE','BLOCK','ESCALATE','WAIT'].map(f=>`<button class="chip" data-act="filter" data-f="${f}" aria-pressed="${filter===f}">${f==='All'?'All':LABEL[f]}</button>`).join('')}</div>
+  <span class="cat" style="margin-left:auto">Showing ${t.length} of ${D.transactions.length}</span><button class="btn ghost" data-act="export-tx">Export CSV</button></div>`+
+  (t.length?`<div class="wrap"><table><thead><tr><th>ID</th><th>Product</th><th>Amount</th><th>Status</th><th>Date</th><th>Agent</th><th>Next step</th></tr></thead><tbody>${t.map(x=>`<tr><td>${esc(x.id)}</td><td>${esc(x.product)}<span class="src">${esc(x.reason)}</span></td><td>${inr(x.amount)}</td><td>${vd(x.decision)}</td><td>${esc(x.date)}</td><td>${esc(x.agent)}</td><td>${actions(x)||esc(x.state)}</td></tr>`).join('')}</tbody></table></div>`
+  :empty(D.transactions.length?'No transactions match this filter.':'No transactions yet. Check a product with the Policy Engine to see it here.',toSearch))},
+
+ mandates(){const cats=['Laptops','Textbooks','Headphones','Accessories'],used=D.mandates.flatMap(m=>m.categories),free=cats.filter(c=>!used.includes(c));
+  return `<div class="row-bar"><span class="cat">The Mandate Pay policy engine evaluates every selected catalogue product against these spending rules.</span><button class="btn ghost" style="margin-left:auto" data-act="export-rules">Export rules</button></div>
+  <details style="margin-bottom:16px"><summary>Create a mandate</summary>${free.length?`<form id="mform" class="mform"><label>Name<input class="fi" name="name" required placeholder="Office Supplies"></label><label>Category<select class="fi" name="category">${free.map(c=>`<option>${c}</option>`).join('')}</select></label><label>Max per purchase (₹)<input class="fi" name="max_per_purchase" type="number" min="1" required></label><label>Approval needed above (₹)<input class="fi" name="approval_above" type="number" min="1" required></label><label>Monthly budget (₹)<input class="fi" name="monthly_budget" type="number" min="1" required></label><button class="btn">Create mandate</button></form>`:'<p class="desc" style="margin-top:8px">Every product category already has a mandate.</p>'}</details>
+  <div class="grid">${D.mandates.map(mandateCard).join('')}</div>`},
+
+ analytics(){const t=D.transactions;if(!t.length)return empty('Analytics appear after your first Policy Engine check.',toSearch);
+  const n=k=>t.filter(x=>x.decision===k).length,cats={};t.forEach(x=>cats[x.category]=(cats[x.category]||0)+x.amount);const mx=Math.max(...Object.values(cats));
+  return `<div class="two"><div class="card"><h3>Decisions</h3>${['APPROVE','ESCALATE','BLOCK'].map(k=>bar(LABEL[k],n(k),t.length,n(k),k)).join('')}</div>
+  <div class="card"><h3>Value checked by category</h3>${Object.entries(cats).map(([c,v])=>bar(c,v,mx,inr(v))).join('')}</div></div>`},
+
+ settings(){const s=D.status,row=(n,on,t,h)=>`<div class="out"><span><i class="dot ${on?'on':''}"></i><b>${n}</b><span class="src">${h}</span></span><span>${t}</span></div>`;
+  return `<h2 style="margin-top:0">Connections</h2><div class="card">
+  ${row('FastAPI backend',s.products,s.products?'Connected':'Offline','Serving this page')}
+  ${row('Gemini AI',s.gemini,s.gemini?'Configured':'Not set','Key is configured; runtime requests may still fall back')}
+  ${row('LangGraph library',s.langgraph,s.langgraph?'Installed':'Not installed','Optional dependency; shopping flow runs without it')}
+  ${row('Policy Engine',!!s.policy,s.policy==='external'?'External service':'Local Mandate Pay engine',s.policy==='external'?'POLICY_ENGINE_URL is configured':'API: /api/policy/evaluate')}</div>
+  <h2>Display preferences</h2><div class="card">${row('Dark mode',0,'Coming soon','Switch to a darker colour scheme')}</div>`}
+};
+
+async function runSearch(q){qv=q;busy=true;draw();
+ try{const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});
+  if(!r.ok)throw new Error((await r.json()).detail||'Search failed');last=await r.json();dec={};policyErrors={}}
+ catch(e){last=last||{parsed:{keywords:[]},recommended:[],excluded:[],summary:'',engine:''};last.err=e.message+'. Check that the server is running and try again.'}
+ busy=false;draw();refresh()}
+
+function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+
+document.addEventListener('click',async e=>{const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
+ if(a==='goto')go(el.dataset.v);
+ else if(a==='bell'){filter='WAIT';go('transactions')}
+ else if(a==='filter'){filter=el.dataset.f;draw()}
+ else if(a==='chip')runSearch(el.textContent);
+ else if(a==='check'){const p=last.recommended[+el.dataset.i];el.disabled=true;el.textContent='Checking…';
+  try{const r=await fetch('/api/policy-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product:p,query:last.query})});
+   const d=await r.json();if(!r.ok)throw new Error(d.detail);dec[p.id]=d;delete policyErrors[p.id]}catch(err){policyErrors[p.id]=err.message||'Policy check failed.'}
+  draw();refresh()}
+ else if(a==='resolve'||a==='pay'){el.disabled=true;
+  try{const r=await fetch(`/api/transactions/${el.dataset.id}/${a}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:el.dataset.do||''})});
+   const t=await r.json();if(!r.ok)throw new Error(t.detail);for(const k in dec)if(dec[k].id===t.id)dec[k]=t}catch(err){alert(err.message)}
+  await refresh();draw()}
+ else if(a==='export-tx'){const q=v=>`"${String(v).replace(/"/g,'""')}"`;download('zentro-transactions.csv',['ID,Product,Amount,Status,Date,Reason'].concat(D.transactions.map(t=>[t.id,t.product,t.amount,t.decision,t.date,t.reason].map(q).join(','))).join('\n'),'text/csv')}
+ else if(a==='export-rules')download('zentro-mandates.json',JSON.stringify(D.mandates,null,2),'application/json')});
+document.addEventListener('submit',async e=>{
+ if(e.target.id==='form'){e.preventDefault();const q=$('#q').value.trim();if(q)runSearch(q)}
+ else if(e.target.id==='mform'){e.preventDefault();
+  try{const r=await fetch('/api/mandates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+   const d=await r.json();if(!r.ok)throw new Error(d.detail);await refresh();draw()}catch(err){alert(err.message)}}});
+document.addEventListener('input',e=>{if(e.target.id==='q')qv=e.target.value});
+$('#tsearch').addEventListener('input',e=>{term=e.target.value.trim().toLowerCase();if(view!=='transactions'){filter='All';go('transactions')}else draw()});
+
+go('dashboard');refresh();
+</script>
+</body>
+</html>
